@@ -1,0 +1,22 @@
+@import "tailwindcss";
+
+:root {
+  --bg: #0b0d10;
+  --panel: #14181e;
+  --ink: #e8edf4;
+  --muted: #8b97a8;
+  --line: #232a34;
+  --up: #3ee0a0;
+  --down: #ff6b7a;
+  --warn: #f0c14b;
+}
+
+html,
+body {
+  background: var(--bg);
+  color: var(--ink);
+}
+
+body {
+  font-family: var(--font-sans), ui-sans-serif, system-ui, sans-serif;
+}

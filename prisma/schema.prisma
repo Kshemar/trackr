@@ -1,0 +1,86 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider  = "postgresql"
+  url       = env("DATABASE_URL")
+  directUrl = env("DIRECT_URL")
+}
+
+model User {
+  id           String             @id @default(cuid())
+  email        String             @unique
+  passwordHash String
+  createdAt    DateTime           @default(now())
+  watchlist    WatchlistItem[]
+  snapshots    LastSeenSnapshot[]
+}
+
+model WatchlistItem {
+  id        String   @id @default(cuid())
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  symbol    String
+  sortOrder Int      @default(0)
+  addedAt   DateTime @default(now())
+
+  @@unique([userId, symbol])
+  @@index([userId, sortOrder])
+}
+
+model QuoteCache {
+  symbol    String   @id
+  price     Float
+  prevClose Float
+  volume    Float
+  avgVolume Float?
+  asOf      DateTime
+  fetchedAt DateTime
+  source    String
+  rawJson   String   @db.Text
+}
+
+model LastSeenSnapshot {
+  id       String   @id @default(cuid())
+  userId   String
+  user     User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  symbol   String
+  price    Float
+  spyPrice Float
+  volume   Float
+  asOf     DateTime
+  seenAt   DateTime
+
+  @@unique([userId, symbol])
+}
+
+model SeriesCache {
+  symbol    String
+  range     String
+  pointsJson String @db.Text
+  fetchedAt DateTime
+  source    String
+
+  @@id([symbol, range])
+}
+
+model FxCache {
+  quote     String   @id
+  rate      Float
+  asOf      DateTime
+  fetchedAt DateTime
+}
+
+model PeerCache {
+  symbol    String   @id
+  peersJson String   @db.Text
+  fetchedAt DateTime
+  source    String
+}
+
+model RateBucket {
+  id          String   @id
+  windowStart DateTime
+  count       Int      @default(0)
+}
