@@ -4,6 +4,8 @@ A **time-aware** market watchlist: it stores what you last acknowledged, then ra
 
 Track your stocks. Stack: **Next.js (App Router) + Prisma + Neon Postgres + Finnhub (Yahoo fallback) + Vercel**. $0 hobby tiers.
 
+### Live at: https://trackr-delta-ruddy.vercel.app
+
 ## Why this exists
 
 A normal watchlist answers “what is the price?” This answers **“what deserves my attention since I last looked?”**
