@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import type { AttentionPayload, AttentionRow, SymbolHit } from "@/lib/types";
 import { formatPct, formatPrice } from "@/lib/types";
 import { formatAsOf } from "@/lib/market";
@@ -22,20 +22,16 @@ function StatusPill({ status }: { status: AttentionRow["quoteStatus"] }) {
   );
 }
 
-async function readError(res: Response) {
-  const json = (await res.json().catch(() => null)) as { error?: string } | null;
-  if (res.status === 429) return json?.error ?? SLOW_DOWN;
-  return json?.error ?? "Request failed.";
-}
-
 function RowCard({
   row,
+  pinIndex,
   onOpen,
   onPrefetch,
   onRemove,
   onAck,
 }: {
   row: AttentionRow;
+  pinIndex: number | null;
   onOpen: (symbol: string) => void;
   onPrefetch: (symbol: string) => void;
   onRemove: (symbol: string) => void;
@@ -43,13 +39,20 @@ function RowCard({
 }) {
   return (
     <article
-      className="cursor-pointer rounded-2xl border border-[#232a34] bg-[#14181e] p-3"
+      className={`cursor-pointer rounded-2xl border bg-[#14181e] p-3 ${
+        pinIndex ? "border-[#e8edf4]" : "border-[#232a34]"
+      }`}
       onClick={() => onOpen(row.symbol)}
       onMouseEnter={() => onPrefetch(row.symbol)}
     >
       <div className="flex items-start justify-between gap-3">
         <div>
           <div className="flex items-center gap-2">
+            {pinIndex ? (
+              <span className="flex h-5 w-5 items-center justify-center rounded-full bg-[#e8edf4] text-[11px] font-medium text-[#0b0d10]">
+                {pinIndex}
+              </span>
+            ) : null}
             <h3 className="font-mono text-lg font-medium">{row.symbol}</h3>
             <StatusPill status={row.quoteStatus} />
           </div>
@@ -113,8 +116,18 @@ export function InboxClient({
   const [query, setQuery] = useState("");
   const [hits, setHits] = useState<SymbolHit[]>([]);
   const [message, setMessage] = useState<string | null>(null);
+  const [toast, setToast] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
-  const [selected, setSelected] = useState<string | null>(null);
+  const [selected, setSelected] = useState<string[]>([]);
+
+  const onRateLimit = useCallback(() => setToast(SLOW_DOWN), []);
+  const onRateClear = useCallback(() => setToast(null), []);
+
+  useEffect(() => {
+    if (!toast) return;
+    const t = window.setTimeout(() => setToast(null), 8000);
+    return () => window.clearTimeout(t);
+  }, [toast]);
 
   const sessionLabel = useMemo(() => {
     if (data.marketSession === "open") return "US cash session open";
@@ -128,8 +141,27 @@ export function InboxClient({
     [data],
   );
 
+  function togglePin(symbol: string) {
+    setSelected((prev) => {
+      if (prev.includes(symbol)) return prev.filter((s) => s !== symbol);
+      if (prev.length < 2) return [...prev, symbol];
+      return [prev[1], symbol];
+    });
+  }
+
+  function noteResponse(res: Response) {
+    if (res.status === 429) {
+      onRateLimit();
+      return "rate" as const;
+    }
+    if (res.ok) onRateClear();
+    return res.ok ? ("ok" as const) : ("err" as const);
+  }
+
   function prefetch(symbol: string) {
-    void fetch(`/api/symbols/${encodeURIComponent(symbol)}/chart?range=3m`);
+    void fetch(`/api/symbols/${encodeURIComponent(symbol)}/chart?range=3m`).then((res) => {
+      noteResponse(res);
+    });
   }
 
   useEffect(() => {
@@ -140,10 +172,7 @@ export function InboxClient({
 
   async function refreshAttention() {
     const res = await fetch("/api/attention");
-    if (res.status === 429) {
-      setMessage(await readError(res));
-      return;
-    }
+    if (noteResponse(res) === "rate") return;
     if (res.ok) setData((await res.json()) as AttentionPayload);
   }
 
@@ -154,10 +183,7 @@ export function InboxClient({
       return;
     }
     const res = await fetch(`/api/watchlist/search?q=${encodeURIComponent(value)}`);
-    if (res.status === 429) {
-      setMessage(await readError(res));
-      return;
-    }
+    if (noteResponse(res) === "rate") return;
     if (!res.ok) return;
     const json = (await res.json()) as { hits: SymbolHit[] };
     setHits(json.hits);
@@ -173,10 +199,15 @@ export function InboxClient({
     });
     const json = (await res.json()) as { error?: string };
     setBusy(false);
-    if (!res.ok) {
-      setMessage(res.status === 429 ? (json.error ?? SLOW_DOWN) : (json.error ?? "Could not add symbol."));
+    if (res.status === 429) {
+      onRateLimit();
       return;
     }
+    if (!res.ok) {
+      setMessage(json.error ?? "Could not add symbol.");
+      return;
+    }
+    onRateClear();
     setQuery("");
     setHits([]);
     await refreshAttention();
@@ -186,10 +217,8 @@ export function InboxClient({
     setBusy(true);
     const res = await fetch(`/api/watchlist?symbol=${encodeURIComponent(symbol)}`, { method: "DELETE" });
     setBusy(false);
-    if (res.status === 429) {
-      setMessage(await readError(res));
-      return;
-    }
+    if (noteResponse(res) === "rate") return;
+    setSelected((prev) => prev.filter((s) => s !== symbol));
     await refreshAttention();
   }
 
@@ -200,8 +229,7 @@ export function InboxClient({
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ symbols }),
     });
-    if (res.status === 429) {
-      setMessage(await readError(res));
+    if (noteResponse(res) === "rate") {
       setBusy(false);
       return;
     }
@@ -245,6 +273,7 @@ export function InboxClient({
           </button>
         ) : null}
         {message ? <p className="mt-2 text-sm text-[#ff6b7a]">{message}</p> : null}
+        <p className="mt-2 text-[11px] text-[#8b97a8]">Pin up to two names for side-by-side charts.</p>
       </section>
 
       {data.attention.length === 0 && data.quiet.length === 0 && data.unavailable.length === 0 ? (
@@ -259,7 +288,8 @@ export function InboxClient({
             <RowCard
               key={row.symbol}
               row={row}
-              onOpen={setSelected}
+              pinIndex={selected.includes(row.symbol) ? selected.indexOf(row.symbol) + 1 : null}
+              onOpen={togglePin}
               onPrefetch={prefetch}
               onAck={(s) => ack([s])}
               onRemove={remove}
@@ -280,7 +310,8 @@ export function InboxClient({
               <RowCard
                 key={row.symbol}
                 row={row}
-                onOpen={setSelected}
+                pinIndex={selected.includes(row.symbol) ? selected.indexOf(row.symbol) + 1 : null}
+                onOpen={togglePin}
                 onPrefetch={prefetch}
                 onAck={(s) => ack([s])}
                 onRemove={remove}
@@ -298,7 +329,8 @@ export function InboxClient({
               <RowCard
                 key={row.symbol}
                 row={row}
-                onOpen={setSelected}
+                pinIndex={selected.includes(row.symbol) ? selected.indexOf(row.symbol) + 1 : null}
+                onOpen={togglePin}
                 onPrefetch={prefetch}
                 onAck={(s) => ack([s])}
                 onRemove={remove}
@@ -310,12 +342,17 @@ export function InboxClient({
     </>
   );
 
+  const gridClass =
+    selected.length === 2
+      ? "mt-2 lg:grid lg:grid-cols-[minmax(0,0.9fr)_minmax(0,1.4fr)] lg:items-start lg:gap-8"
+      : "mt-2 lg:grid lg:grid-cols-[minmax(0,1.1fr)_minmax(22rem,28rem)] lg:items-start lg:gap-8";
+
   return (
     <div className="mx-auto max-w-7xl px-4 py-8 sm:px-6 xl:px-10">
       <header className="flex flex-wrap items-start justify-between gap-4">
         <div>
-          <p className="font-mono text-[11px] tracking-[0.18em] text-[#8b97a8] uppercase">After last look</p>
-          <h1 className="mt-1 text-3xl font-semibold">Needs you now</h1>
+          <p className="font-mono text-[11px] tracking-[0.18em] text-[#8b97a8] uppercase">Trackr</p>
+          <h1 className="mt-1 text-3xl font-semibold">Track your stocks</h1>
           <p className="mt-2 text-sm text-[#8b97a8]">
             {sessionLabel} · source {data.dataSource}
             {data.dataSource !== "finnhub" ? " (fallback)" : ""} · delayed free data
@@ -336,22 +373,30 @@ export function InboxClient({
         </div>
       </header>
 
-      <div className="mt-2 lg:grid lg:grid-cols-[minmax(0,1.1fr)_minmax(22rem,28rem)] lg:items-start lg:gap-8">
+      <div className={gridClass}>
         <div>{list}</div>
         <SymbolPanel
-          symbol={selected}
-          variant="docked"
-          onClose={() => setSelected(null)}
-          onOpenSymbol={setSelected}
+          symbols={selected}
+          onUnpin={(symbol) => setSelected((prev) => prev.filter((s) => s !== symbol))}
+          onClose={() => setSelected([])}
+          onOpenSymbol={togglePin}
           onAdd={add}
+          onRateLimit={onRateLimit}
+          onRateClear={onRateClear}
         />
       </div>
+
+      {toast ? (
+        <div className="pointer-events-none fixed bottom-6 left-1/2 z-50 -translate-x-1/2 rounded-full bg-[#14181e] px-5 py-2.5 text-sm shadow-lg ring-1 ring-[#f0c14b]">
+          {toast}
+        </div>
+      ) : null}
 
       <footer className="mt-16 border-t border-[#232a34] pt-6 text-xs text-[#8b97a8]">
         Not investment advice. Quotes may be delayed or served from cache when the vendor rate-limits.
         Meaningful change = |price since last look| ≥ 2%, |excess vs SPY| ≥ 1.5%, or volume ≥ 1.5× 20-day
         average. Finnhub/Yahoo can quote many exchanges; this app’s session clock and SPY comparison are
-        US-centric. Click a name for trend, FX, and related tickers.
+        US-centric. Pin up to two names; use Compare for a percent overlay.
       </footer>
     </div>
   );

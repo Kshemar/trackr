@@ -35,6 +35,7 @@ model QuoteCache {
   prevClose Float
   volume    Float
   avgVolume Float?
+  exchange  String?
   asOf      DateTime
   fetchedAt DateTime
   source    String

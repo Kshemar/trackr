@@ -14,6 +14,7 @@ function quotePayload(symbol: string, quotes: Awaited<ReturnType<typeof getQuote
     quoteStatus: quote.status,
     quoteAsOf: quote.asOf.toISOString(),
     source: quote.source,
+    exchange: quote.exchange,
   };
 }
 
@@ -32,8 +33,8 @@ export async function getSymbolChart(symbolRaw: string, range: ChartRange) {
   };
 }
 
-export async function getSymbolPeers(symbolRaw: string): Promise<PeerQuote[]> {
-  return getPeers(normalizeSymbol(symbolRaw));
+export async function getSymbolPeers(symbolRaw: string, cap?: number): Promise<PeerQuote[]> {
+  return getPeers(normalizeSymbol(symbolRaw), cap);
 }
 
 export async function getSymbolDetail(

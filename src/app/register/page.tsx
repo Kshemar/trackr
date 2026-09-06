@@ -34,7 +34,8 @@ export default function RegisterPage() {
 
   return (
     <main className="mx-auto flex min-h-screen max-w-md flex-col justify-center px-6">
-      <h1 className="text-2xl font-semibold">Create account</h1>
+      <p className="font-mono text-[11px] tracking-[0.18em] text-[#8b97a8] uppercase">Trackr</p>
+      <h1 className="mt-2 text-2xl font-semibold">Create account</h1>
       <p className="mt-2 text-sm text-[#8b97a8]">Free. Watchlist and last-seen snapshots live in your account.</p>
       <form onSubmit={onSubmit} className="mt-8 space-y-4">
         <label className="block text-sm">

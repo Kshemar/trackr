@@ -1,8 +1,9 @@
 import { prisma } from "./prisma";
 import { getMarketSession, quoteTtlMs } from "./market";
+import { consumeFinnhub, peekFinnhub } from "./rate-limit";
 import type { Quote, QuoteStatus, SymbolHit } from "./types";
 import { normalizeSymbol } from "./types";
-import { consumeFinnhub, peekFinnhub } from "./rate-limit";
+import { inferExchange } from "./exchange";
 
 type FetchedQuote = Omit<Quote, "status" | "fetchedAt"> & { raw: unknown };
 
@@ -52,12 +53,29 @@ async function finnhubQuote(symbol: string, token: string): Promise<FetchedQuote
     }
   }
 
+  let exchangeHint: string | null = null;
+  if (await consumeFinnhub(1)) {
+    try {
+      const profileRes = await fetch(
+        `https://finnhub.io/api/v1/stock/profile2?symbol=${encodeURIComponent(symbol)}&token=${token}`,
+        { cache: "no-store" },
+      );
+      if (profileRes.ok) {
+        const profile = (await profileRes.json()) as { exchange?: string };
+        exchangeHint = profile.exchange?.trim() || null;
+      }
+    } catch {
+      // Suffix map / "US" is enough when profile2 is skipped.
+    }
+  }
+
   return {
     symbol,
     price: quote.c,
     prevClose: quote.pc || quote.c,
     volume,
     avgVolume,
+    exchange: inferExchange(symbol, exchangeHint),
     asOf: quote.t ? new Date(quote.t * 1000) : new Date(),
     source: "finnhub",
     raw: quote,
@@ -81,6 +99,8 @@ async function yahooQuote(symbol: string): Promise<FetchedQuote | null> {
           chartPreviousClose?: number;
           regularMarketTime?: number;
           previousClose?: number;
+          fullExchangeName?: string;
+          exchangeName?: string;
         };
         timestamp?: number[];
         indicators?: { quote?: Array<{ volume?: Array<number | null> }> };
@@ -104,6 +124,10 @@ async function yahooQuote(symbol: string): Promise<FetchedQuote | null> {
     prevClose,
     volume,
     avgVolume,
+    exchange: inferExchange(
+      symbol,
+      result?.meta?.fullExchangeName || result?.meta?.exchangeName,
+    ),
     asOf: asOfUnix ? new Date(asOfUnix * 1000) : new Date(),
     source: "yahoo",
     raw: result?.meta ?? {},
@@ -130,6 +154,7 @@ function toQuote(
     prevClose: number;
     volume: number;
     avgVolume: number | null;
+    exchange: string | null;
     asOf: Date;
     fetchedAt: Date;
     source: string;
@@ -142,6 +167,7 @@ function toQuote(
     prevClose: row.prevClose,
     volume: row.volume,
     avgVolume: row.avgVolume,
+    exchange: inferExchange(row.symbol, row.exchange),
     asOf: row.asOf,
     fetchedAt: row.fetchedAt,
     source: row.source,
@@ -193,6 +219,7 @@ export async function getQuotes(symbols: string[]): Promise<Map<string, Quote>> 
             prevClose: live.prevClose,
             volume: live.volume,
             avgVolume: live.avgVolume,
+            exchange: live.exchange,
             asOf: live.asOf,
             fetchedAt: new Date(),
             source: live.source,
@@ -203,6 +230,7 @@ export async function getQuotes(symbols: string[]): Promise<Map<string, Quote>> 
             prevClose: live.prevClose,
             volume: live.volume,
             avgVolume: live.avgVolume,
+            exchange: live.exchange,
             asOf: live.asOf,
             fetchedAt: new Date(),
             source: live.source,

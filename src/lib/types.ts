@@ -15,6 +15,7 @@ export type Quote = {
   prevClose: number;
   volume: number;
   avgVolume: number | null;
+  exchange: string | null;
   asOf: Date;
   fetchedAt: Date;
   source: string;
@@ -122,6 +123,7 @@ export type SymbolDetail = {
     quoteStatus: QuoteStatus;
     quoteAsOf: string;
     source: string;
+    exchange: string | null;
   } | null;
   series: {
     range: ChartRange;

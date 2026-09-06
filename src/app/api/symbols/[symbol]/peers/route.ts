@@ -4,7 +4,7 @@ import { getSymbolPeers } from "@/lib/detail";
 import { normalizeSymbol } from "@/lib/types";
 
 export async function GET(
-  _request: Request,
+  request: Request,
   context: { params: Promise<{ symbol: string }> },
 ) {
   const gated = await requireAuthedRateLimit();
@@ -14,6 +14,8 @@ export async function GET(
   const symbol = normalizeSymbol(raw);
   if (!symbol) return NextResponse.json({ error: "Invalid symbol" }, { status: 400 });
 
-  const peers = await getSymbolPeers(symbol);
+  const capRaw = Number(new URL(request.url).searchParams.get("cap") ?? "");
+  const cap = Number.isFinite(capRaw) && capRaw > 0 ? capRaw : undefined;
+  const peers = await getSymbolPeers(symbol, cap);
   return NextResponse.json({ peers });
 }

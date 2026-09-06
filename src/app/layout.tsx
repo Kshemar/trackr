@@ -15,8 +15,8 @@ const mono = IBM_Plex_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "After Last Look — Smart Watchlist",
-  description: "See what meaningfully changed in your watchlist since you last checked.",
+  title: "Trackr",
+  description: "Track your stocks. See what meaningfully changed since you last checked.",
 };
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {

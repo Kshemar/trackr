@@ -1,8 +1,8 @@
-# After Last Look
+# Trackr
 
 A **time-aware** market watchlist: it stores what you last acknowledged, then ranks names by what meaningfully changed since then — including excess return vs SPY — and labels delayed or cached data instead of pretending quotes are live.
 
-Stack: **Next.js (App Router) + Prisma + Neon Postgres + Finnhub (Yahoo fallback) + Vercel**. $0 hobby tiers.
+Track your stocks. Stack: **Next.js (App Router) + Prisma + Neon Postgres + Finnhub (Yahoo fallback) + Vercel**. $0 hobby tiers.
 
 ## Why this exists
 
@@ -12,7 +12,7 @@ A normal watchlist answers “what is the price?” This answers **“what deser
 - Moves are compared to **SPY** over the same window
 - Quiet names collapse so a 40-name list is scannable
 - Cache + as-of timestamps are first-class (`fresh` / `stale` / `unavailable`)
-- Click a cached name for a **trend chart**, **USD + local FX**, and **vendor-related peers**
+- Click a cached name for a **trend chart**, **USD + local FX**, **vendor-related peers**, and the **exchange** the quote is from (vendor metadata, not a venue switcher)
 
 **Attention rule:** `|Δ since last look| ≥ 2%` **or** `|excess vs SPY| ≥ 1.5%` **or** `volume ≥ 1.5×` 20-day average.
 
@@ -37,7 +37,7 @@ After schema changes, run `npx prisma db push` again so `SeriesCache`, `FxCache`
 
 **Rate limits:** 40 authenticated API calls per user per minute. Over that, the UI shows **Woah slow down buddy**. Finnhub is capped at ~50 calls/min globally; extra traffic uses cache and Yahoo.
 
-**Exchanges:** Finnhub and Yahoo can quote many listings (US plus suffixes like `.DE`, `.T`, `.NS`). Search shows the vendor display symbol. The app’s session clock and SPY-relative score are still **US-centric**.
+**Exchanges:** The chart labels the **vendor venue** for that ticker (NASDAQ, NYSE, TSX, and so on). That is where the quote is from, not a switch between NYSE and Nasdaq for the same US symbol. International names use suffixes like `.DE`, `.T`, `.NS`. Session clock and SPY-relative score stay **US-centric**.
 
 `AUTH_SECRET` must be a long random string in production (`openssl rand -base64 32`).
 

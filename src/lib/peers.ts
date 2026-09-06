@@ -60,8 +60,9 @@ async function fetchPeerSymbols(symbol: string): Promise<{ peers: string[]; sour
   return null;
 }
 
-export async function getPeers(symbolRaw: string): Promise<PeerQuote[]> {
+export async function getPeers(symbolRaw: string, cap = PEER_CAP): Promise<PeerQuote[]> {
   const symbol = normalizeSymbol(symbolRaw);
+  const limit = Math.min(cap, PEER_CAP);
   const cached = await prisma.peerCache.findUnique({ where: { symbol } });
   let names: string[] = [];
 
@@ -90,7 +91,7 @@ export async function getPeers(symbolRaw: string): Promise<PeerQuote[]> {
     }
   }
 
-  names = names.filter((name) => name !== symbol).slice(0, PEER_CAP);
+  names = names.filter((name) => name !== symbol).slice(0, limit);
   if (!names.length) return [];
 
   const quotes = await getQuotes(names);
